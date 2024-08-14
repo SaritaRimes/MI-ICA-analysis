@@ -23,7 +23,7 @@ for oc = occupancies
     number_events = size(data,1);
     number_samples = size(data,2);
     number_intervals = 100; % number of discretization intervals
-    h = (1-(-1))/number_intervals;
+    h = (1-(-1))/number_intervals; % step of discretization
     index = (oc/10) + 1;
 
     % Applying ICA to the data
@@ -35,8 +35,10 @@ for oc = occupancies
     normalized_noise_ica = normalizeSamples(dataICA); % normalized variables
     
     % Discretizing the variables and getting the number of samples per interval
-    [discretized_noise, number_samples_interval] = discretizeSamples(normalized_noise, number_intervals, oc);
-    [discretized_noise_ica, number_samples_interval_ica] = discretizeSamples(normalized_noise_ica, number_intervals, oc);
+    [discretized_noise, number_samples_interval] ...
+        = discretizeSamples(normalized_noise, number_intervals, oc, 0);
+    [discretized_noise_ica, number_samples_interval_ica] ...
+        = discretizeSamples(normalized_noise_ica, number_intervals, oc, 0);
 
     % Calculating the marginal probabilities
     marginal_probability = number_samples_interval/number_events;
@@ -47,18 +49,20 @@ for oc = occupancies
     checkProbabilities("marginal", marginal_probability_ica);
         
     % Calculating the joint probabilities
-    joint_probability = jointProbability(discretized_noise, number_intervals, oc);
-    joint_probability_ica = jointProbability(discretized_noise_ica, number_intervals, oc);
+    joint_probability = jointProbability(discretized_noise, ...
+                                         number_intervals, oc, 0);
+    joint_probability_ica = jointProbability(discretized_noise_ica, ...
+                                             number_intervals, oc, 0);
 
     % Checking whether the joint probabilities sums 1
     checkProbabilities("joint", joint_probability);
     checkProbabilities("joint", joint_probability_ica);
     
     % Calculating the Mutual Information
-    MI{index, 1} = mutualInformation(size(discretized_noise, 2), number_intervals, marginal_probability, ...
-                                     joint_probability, oc);
-    MI{index, 2} = mutualInformation(size(discretized_noise_ica, 2), number_intervals, marginal_probability_ica, ...
-                                     joint_probability_ica, oc);
+    MI{index, 1} = mutualInformation(size(discretized_noise, 2), number_intervals, ...
+                                     marginal_probability, joint_probability, oc, 0);
+    MI{index, 2} = mutualInformation(size(discretized_noise_ica, 2), number_intervals, ...
+                                     marginal_probability_ica, joint_probability_ica, oc, 0);
     
     % Calculating the crosstalk, which is the mutual information contained in all the process
     totalMI(index, 1) = mutualInformationCrosstalk(MI{index, 1}, number_samples);

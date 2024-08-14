@@ -1,5 +1,6 @@
-function joint_prob = jointProbability(noise, number_intervals, occupancy)
-    fprintf(['# Joint Probability \nOccupancy: ' int2str(occupancy) '\n']);
+function joint_prob = jointProbability(noise, number_intervals, occupancy, fold)
+    fprintf(['# Joint Probability \nOccupancy: ' int2str(occupancy) ...
+             ', \tFold: ' int2str(fold) '\n']);
 
     discretized_noise = noise; % serao as amostras discretizadas
 
