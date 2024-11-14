@@ -1,4 +1,4 @@
-% Calculo da informacao mutua %
+%% Calculation of Mutual Information %%
 
 clear all
 close all

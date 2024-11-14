@@ -1,6 +1,6 @@
-%% Analise de eficiencia %%
-% Metodos: OF, COF, MLE Gaussiano e MLE Lognormal %
-% Dados: gerados com o simulador em Python %
+%% Effiiency Analysis %%
+% Methods: OF, COF, Gaussian MLE e ICA MLE %
+% Data: it was generated using the new simulator (github.com/ingoncalves/calorimetry-pulse-simulator) %
 
 clear all
 close all
@@ -8,262 +8,196 @@ close all
 
 addpath("FastICA_25");
 
-%Iniciando algumas estruturas que serao utilizadas
-mediaGaussiano = zeros(11, 1);
-mediaOF2 = zeros(11, 1);
-mediaCOF = zeros(11, 1);
-mediaICA = zeros(11, 1);
-desvioPadraoGaussiano = zeros(11, 1);
-desvioPadraoOF2 = zeros(11, 1);
-desvioPadraoCOF = zeros(11, 1);
-desvioPadraoICA = zeros(11, 1);
+mean_error_gauss = zeros(11, 1);
+mean_error_of = zeros(11, 1);
+mean_error_cof = zeros(11, 1);
+mean_error_ica = zeros(11, 1);
+std_error_gauss = zeros(11, 1);
+std_error_of = zeros(11, 1);
+std_error_cof = zeros(11, 1);
+std_error_ica = zeros(11, 1);
 
-%Definindo algumas variaveis
 mPu = 100;
 snr = 3;
 bins = 100;
-numeroDimensoes = 3;
+number_dimensions = 3;
 
-for oc = 20:10:20
+occupancies = [10 30 50 80];
 
-    % Carregando os dados de ruido e definindo o pedestal
-    ruido = load(['../dadosRuido/comPedestal/mPu' int2str(mPu) '_snr' int2str(snr) '/noise-ocup' int2str(oc) '.csv']); %carrega os dados de ruido
-    ped = 50;
+for oc = occupancies
+
+    noise = load(['../dadosRuido/comPedestal/mPu' int2str(mPu) '_snr' int2str(snr) ...
+                  '/noise-ocup' int2str(oc) '.csv']); % load noise data
+    pedestal = 50;
     %ruido = ruido - ped;
     
-    % Fazendo a divisao dos dados, antes da ICA, em dois conjuntos
-    div = cvpartition(size(ruido,1), 'Holdout', 0.5); %escolhe 50% dos sinais aleatoriamente
-    ind = div.test; %retorna os indices dos 50% escolhidos
-    ruidoTreino = ruido(ind,:); %os 50% sao selecionados para o conjunto de treino
-    ruidoTeste = ruido(~ind,:); %os outros 50% sao selecionados para o conjunto de teste
-    numeroEventos = size(ruidoTeste,1); %quantidade de sinais no conjunto de teste
+    % Dividing the before ICA data in two datasets
+    div = cvpartition(size(noise,1), 'Holdout', 0.5); % choose 50% of signals randomly
+    ind = div.test; % return the indexes of 50% of choosing signals
+    noise_train = noise(ind,:);
+    noise_test = noise(~ind,:);
+    number_events = size(noise_test,1); %quantidade de sinais no conjunto de teste
 
-    mediaRuidoTreino = mean(ruidoTreino);
-    % Aplicando a ICA aos dados de ruido de treinamento
-    [ruidoICA, A, W] = fastica(ruidoTreino', 'numOfIC', numeroDimensoes); %aplica a ICA
-    ruidoICA = ruidoICA'; %transpoe a matriz para ter as variaveis nas colunas
-%     return;
-    % Normalizando os histogramas do ruido apos a ICA
-    histProbabilidades = -1*ones(bins,size(ruidoICA,2));
-    histIntervalosBins = zeros(bins + 1,size(ruidoICA,2));
-    for i = 1:numeroDimensoes
-        h = histogram(ruidoICA(:,i),bins,'Normalization','probability');
-        histProbabilidades(:,i) = h.Values;
-        histIntervalosBins(:,i) = h.BinEdges;
-%         return;
-        figure;
+    mean_noise_train = mean(noise_train);
+
+    % Applying ICA to the noise data of training
+    [noise_ica, A, W] = fastica(noise_train', 'numOfIC', number_dimensions); % ICA function
+    noise_ica = noise_ica'; % variables must be in columns
+
+    % Normalizing the histograms of noise after ICA
+    hist_probabilities = -1*ones(bins, size(noise_ica,2));
+    hist_bins = zeros(bins + 1, size(noise_ica,2));
+    for i = 1:number_dimensions
+        h = histogram(noise_ica(:,i), bins, 'Normalization', 'probability');
+        hist_probabilities(:,i) = h.Values;
+        hist_bins(:,i) = h.BinEdges;
+        figure
     end
-%     return;
-    % Encontrando coordenadas x dos histogramas
-    histCoordenadaX = zeros(size(histIntervalosBins, 1) - 1, numeroDimensoes);
-    for j = 1:numeroDimensoes
-        for i = 1:size(histIntervalosBins, 1) - 1
-            histCoordenadaX(i,j) = (histIntervalosBins(i,j) + histIntervalosBins(i + 1,j))/2;
+
+    % Finding the x coordinates of histograms
+    hist_coordinate_x = zeros(size(hist_bins, 1) - 1, number_dimensions);
+    spline_hist = zeros(number_dimensions);
+    for j = 1:number_dimensions
+        for i = 1:size(hist_bins, 1) - 1
+            hist_coordinate_x(i,j) = (hist_bins(i,j) + hist_bins(i + 1,j))/2;
         end
         
         %Utilizando spline para interpolar
         %splineCoordenadaX = min(histCoordenadaX(:,j)):0.1:max(histCoordenadaX(:,j));
-        splineHist(j) = spline(histCoordenadaX(:,j), histProbabilidades(:,j));
+        spline_hist(j) = spline(hist_coordinate_x(:,j), hist_probabilities(:,j));
         %ppval(splineHist(3),min(histCoordenadaX(:,3)):0.1:max(histCoordenadaX(:,3)));
     end
     
-%     return;
-    
-    % Vetores de entrada
+    % Structures pre defined
     s = [0  0.0172  0.4524  1  0.5633  0.1493  0.0424]; %vetor de amostras do pulso de 
                                                         %referencia normalizado
     OF2 = [-0.3781  -0.3572  0.1808  0.8125  0.2767  -0.2056  -0.3292];
     
-    % Aplicando a ICA ao pulso normalizado
-    %sICA = s*W;
+    % Applying the ICA to the normalized pulse
+%     sICA = s*W;
     
-    % Montando o sinal completo
-    amplitudeVerdadeira = exprnd(snr*mPu, numeroEventos, 1);
-    r = zeros(numeroEventos, size(ruidoTeste,2));
-    for i = 1:numeroEventos
-        r(i,:) = amplitudeVerdadeira(i)*pegaPulseJitter + ruidoTeste(i,:); %sinal completo em 7 dimensoes
+    % Mounting the complete signal
+    amplitude_true = exprnd(snr*mPu, number_events, 1);
+    r = zeros(number_events, size(noise_test,2));
+    for i = 1:number_events
+        r(i,:) = amplitude_true(i)*pegaPulseJitter + noise_test(i,:); % complete signal in 7 dimensions
     end    
     
-    % Calculando a amplitude pelos metodos lineares
-    covarianciaGaussiano = cov(ruidoTreino); %matriz de covariancia do ruido
-    OF = (inv(covarianciaGaussiano)*s')/(s*inv(covarianciaGaussiano)*s');
-    amplitudeGaussiano = (r - ped)*OF;
-    amplitudeOF2 = r*OF2';
-    amplitudeCOF = aplicaCOF(r - ped,4.5);
+    % Estimating the amplitude using the linear methods
+    covariance_gauss = cov(noise_train); % covariance matrix of training data
+    OF = (inv(covariance_gauss)*s')/(s*inv(covariance_gauss)*s');
+    amplitude_gauss = (r - pedestal)*OF;
+    amplitude_of = r*OF2';
+    amplitude_cof = aplicaCOF(r - pedestal,4.5);
 
-    % Calculando a PDF gaussiana
-    ruidoGaussiano = r - amplitudeGaussiano*s;
-    pdfGaussiano = ones(numeroEventos, 1);
-    for i = 1:size(ruidoGaussiano, 1)
-        pdfGaussiano(i) = (1/(sqrt(det(covarianciaGaussiano))*(2*pi)^(3.5)))...
-                          *exp(-.5*ruidoGaussiano(i, :)*inv(covarianciaGaussiano) ...
-                               *ruidoGaussiano(i, :)');
+    % Estimating the Gaussian PDF
+    noise_gauss = r - amplitude_gauss*s;
+    pdf_gauss = ones(number_events, 1);
+    for i = 1:size(noise_gauss, 1)
+        pdf_gauss(i) = (1/(sqrt(det(covariance_gauss))*(2*pi)^(3.5)))...
+                          *exp(-.5*noise_gauss(i, :)*inv(covariance_gauss) ...
+                               *noise_gauss(i, :)');
     end
     
-    % Calculando a amplitude pelo metodo MLE com ICA
-    amplitudeICA = amplitudeGaussiano;
-    probMarginal = zeros(1, numeroDimensoes);
-    pdfICA = ones(numeroEventos, 1);
-    for i = 1:numeroEventos
-        %fprintf("Aplicando o metodo MLE Lognormal.\n");
-        fprintf("Media do sinal = %d \nOcupacao = %d \nEvento = %d/%d \n", snr*mPu, oc, i, numeroEventos);
+    % Estimating the amplitude using MLE + ICA method
+    amplitude_ica = amplitude_gauss;
+    marginal_probability = zeros(1, number_dimensions);
+    pdf_ica = ones(number_events, 1);
+    for i = 1:number_events
+        fprintf("Media do sinal = %d \nOcupacao = %d \nEvento = %d/%d \n", ...
+                snr*mPu, oc, i, number_events);
         
-        probMaxima = -1;
-        for amplitudeAuxiliar = amplitudeGaussiano(i)-100:1:amplitudeGaussiano(i)+100
+        maximum_probability = -1;
+        for amplitude_auxiliary = amplitude_gauss(i)-100:1:amplitude_gauss(i)+100
             
-            ruidoAuxiliarTemporario = r(i,:) - amplitudeAuxiliar*s;
-            ruidoAuxiliar = (ruidoAuxiliarTemporario-mediaRuidoTreino)*W';
+            ruidoAuxiliarTemporario = r(i,:) - amplitude_auxiliary*s;
+            ruidoAuxiliar = (ruidoAuxiliarTemporario-mean_noise_train)*W';
             
-            for j = 1:numeroDimensoes
-                probMarginal(j) = ppval(splineHist(j), ruidoAuxiliar(j));
+            for j = 1:number_dimensions
+                marginal_probability(j) = ppval(spline_hist(j), ruidoAuxiliar(j));
             end
             
-%             return;
+            probability_ica = prod(marginal_probability);
             
-%             for j = 1:(size(histIntervalosBins, 1) - 1)
-%                 for k = 1:size(ruidoAuxiliar, 2)
-%                     if ruidoAuxiliar(k) >= histIntervalosBins(j,k) && ruidoAuxiliar(k) < histIntervalosBins(j + 1,k)
-%                         probMarginal(k) = histProbabilidades(j,k);
-%                     end
-%                 end
-%             end
-            
-            probICA = prod(probMarginal);
-            
-            if (probICA > probMaxima)
-                amplitudeICA(i,1) = amplitudeAuxiliar;
-                probMaxima = probICA;
+            if (probability_ica > maximum_probability)
+                amplitude_ica(i,1) = amplitude_auxiliary;
+                maximum_probability = probability_ica;
             end
         end
         
-        pdfICA(i) = probMaxima;
+        pdf_ica(i) = maximum_probability;
     end
 
-    % Calculando o chi2 de cada metodo
-    chi2Gaussiano = zeros(numeroEventos, 1);
-    chi2ICA = zeros(numeroEventos, 1);
-    for i = 1:numeroEventos
-        ruidoTemporario = r(i, :) - (amplitudeGaussiano(i)*s + ped);
-        chi2Gaussiano(i) = sqrt(sum((ruidoTemporario.^2)./7));
-        ruidoTemporario = r(i, :) - (amplitudeICA(i)*s + ped);
-        chi2ICA(i) = sqrt(sum((ruidoTemporario.^2)./7));
+    % Estimating the chi2 of each method
+    chi2_gaussiano = zeros(number_events, 1);
+    chi2_ica = zeros(number_events, 1);
+    for i = 1:number_events
+        % gaussian
+        noise_temporary = r(i, :) - (amplitude_gauss(i)*s + pedestal);
+        chi2_gaussiano(i) = sqrt(sum((noise_temporary.^2)./7));
+        % ica
+        noise_temporary = r(i, :) - (amplitude_ica(i)*s + pedestal);
+        chi2_ica(i) = sqrt(sum((noise_temporary.^2)./7));
     end
     
-    % Calculando os erros de cada metodo
-    erroGaussiano(:,1) = amplitudeGaussiano - amplitudeVerdadeira;
-    erroOF2(:,1) = amplitudeOF2 - amplitudeVerdadeira;
-    erroCOF(:,1) = amplitudeCOF - amplitudeVerdadeira;
-    erroICA(:,1) = amplitudeICA - amplitudeVerdadeira;
+    % Estimating the error of each method
+    error_gauss(:,1) = amplitude_gauss - amplitude_true;
+    error_of(:,1) = amplitude_of - amplitude_true;
+    error_cof(:,1) = amplitude_cof - amplitude_true;
+    error_ica(:,1) = amplitude_ica - amplitude_true;
 
-    % Calculando a media dos erros
+    % Estimating the mean of the errors
     indice = oc/10 + 1;
-    mediaGaussiano(indice, 1) = mean(erroGaussiano);
-    mediaOF2(indice, 1) = mean(erroOF2);
-    mediaCOF(indice, 1) = mean(erroCOF);
-    mediaICA(indice, 1) = mean(erroICA);
+    mean_error_gauss(indice, 1) = mean(error_gauss);
+    mean_error_of(indice, 1) = mean(error_of);
+    mean_error_cof(indice, 1) = mean(error_cof);
+    mean_error_ica(indice, 1) = mean(error_ica);
 
-    % Calculando o desvio padrao dos erros
-    desvioPadraoGaussiano(indice, 1) = std(erroGaussiano);
-    desvioPadraoOF2(indice, 1) = std(erroOF2);
-    desvioPadraoCOF(indice, 1) = std(erroCOF);
-    desvioPadraoICA(indice, 1) = std(erroICA);
-
+    % Estimating the standard deviation of the errors
+    std_error_gauss(indice, 1) = std(error_gauss);
+    std_error_of(indice, 1) = std(error_of);
+    std_error_cof(indice, 1) = std(error_cof);
+    std_error_ica(indice, 1) = std(error_ica);
 end
 
 % Plotando os histogramas dos erros
-histogram(erroGaussiano, 100, 'DisplayStyle', 'stairs', 'EdgeColor', 'r', 'LineWidth', 1.5);
+histogram(error_gauss, 100, 'DisplayStyle', 'stairs', 'EdgeColor', 'r', 'LineWidth', 1.5);
 hold on
-histogram(erroOF2, 100, 'DisplayStyle', 'stairs', 'EdgeColor', 'g', 'LineWidth', 1.5);
+histogram(error_of, 100, 'DisplayStyle', 'stairs', 'EdgeColor', 'g', 'LineWidth', 1.5);
 hold on
-histogram(erroCOF, 100, 'DisplayStyle', 'stairs', 'EdgeColor', 'k', 'LineWidth', 1.5);
+histogram(error_cof, 100, 'DisplayStyle', 'stairs', 'EdgeColor', 'k', 'LineWidth', 1.5);
 hold on
-histogram(erroICA, 100, 'DisplayStyle', 'stairs', 'EdgeColor', 'm', 'LineWidth', 1.5);
+histogram(error_ica, 100, 'DisplayStyle', 'stairs', 'EdgeColor', 'm', 'LineWidth', 1.5);
 hold off
 xlim([-500 600]);
 legend({'MLE Gaussiano', 'OF', 'COF', 'MLE ICA'}, 'Position', [0.17 0.7 0.1 0.2]);
-title(['Histograma dos erros com ' int2str(numeroDimensoes) ' dimensões']);
+title(['Histograma dos erros com ' int2str(number_dimensions) ' dimensões']);
 
 % Plotando os graficos de erro versus probabilidade
 figure
-scatter(erroGaussiano, pdfGaussiano, 'MarkerEdgeColor', 'b', 'Marker', '.');
+scatter(error_gauss, pdf_gauss, 'MarkerEdgeColor', 'b', 'Marker', '.');
 title(['MLE Gaussiano, ocupação ' int2str(oc) '%'], 'FontSize', 13);
 xlabel('Erro (contagens de ADC)');
 ylabel('Probabilidade');
 figure
-scatter(erroICA, pdfICA, 'MarkerEdgeColor', 'r', 'Marker', '.');
+scatter(error_ica, pdf_ica, 'MarkerEdgeColor', 'r', 'Marker', '.');
 title(['MLE + ICA, ocupação ' int2str(oc) '%'], 'FontSize', 13);
 xlabel('Erro (contagens de ADC)');
 ylabel('Probabilidade');
 
 % Plotando os graficos de erro versus chi2
 figure
-scatter(erroGaussiano, chi2Gaussiano, 'MarkerEdgeColor', 'b', 'Marker', '.');
+scatter(error_gauss, chi2_gaussiano, 'MarkerEdgeColor', 'b', 'Marker', '.');
 title(['MLE Gaussiano, ocupação ' int2str(oc) '%'], 'FontSize', 13);
 xlabel('Erro (contagens de ADC)');
 ylabel('\chi^2');
 figure
-scatter(erroICA, chi2ICA, 'MarkerEdgeColor', 'r', 'Marker', '.');
+scatter(error_ica, chi2_ica, 'MarkerEdgeColor', 'r', 'Marker', '.');
 title(['MLE + ICA, ocupação ' int2str(oc) '%'], 'FontSize', 13);
 xlabel('Erro (contagens de ADC)');
 ylabel('\chi^2');
 
-return;
-
-    % Montando o sinal completo apos a ICA
-%     amplitudeVerdadeiraICA = exprnd(mediaSinalICA, numeroEventosICA, 1);
-%     rICA = zeros(numeroEventosICA, size(ruidoTesteICA,2));
-%     for i = 1:numeroEventosICA
-%         rICA(i,:) = amplitudeVerdadeiraICA(i)*pegaPulseJitter + ruidoTesteICA(i,:); %sinal completo em 7 dimensoes
-%     end
-%     rICA = r*W;
-    
-    % Calculando os parametros da distribuicao Lognormal
-%     k = 1; %contador
-%     mediaLogn = zeros(1,size(ruidoICA,2));
-%     desvioPadraoLogn = zeros(1,size(ruidoICA,2));
-%     for i = 1:size(ruidoICA,2)
-%         k = ruidoICA(:,i) > 0;
-%         mediaLogn(i) = mean(log(ruidoICA(k,i)));
-%         desvioPadraoLogn(i) = std(log(ruidoICA(k,i)));
-%     end
-
-    % Calculando a media do sinal de interesse apos a ICA
-%     tamanhoRuidoPositivoICA = -1;
-%     for i = 1:size(ruidoICA, 2)
-%         k = ruidoICA(:,i) > 0; %seleciona apenas as amostras > 0 da coluna i
-%         ruidoPositivoTemporarioICA = ruidoICA(k,i);        
-%         
-%         %Verificando qual coluna sera usada para calcular a media
-%         if size(ruidoPositivoTemporarioICA,1) > tamanhoRuidoPositivoICA
-%             tamanhoRuidoPositivoICA = size(ruidoPositivoTemporarioICA,1);
-%             ruidoPositivoICA = ruidoPositivoTemporarioICA;
-%             maiorDimensao = i;
-%         end
-%     end
-%     mediaSinalICA = mean(ruidoPositivoICA);
-
-    % Calculando a media do sinal de interesse antes da ICA
-%     tamanhoRuidoPositivo = -1;
-%     for i = 1:size(ruido, 2)
-%         k = ruido(:,i) > 0; %seleciona apenas as amostras > 0 da coluna i
-%         ruidoPositivoTemporario = ruido(k,i);
-%         
-%         %Verificando qual coluna sera usada para calcular a media
-%         if size(ruidoPositivoTemporario,1) > tamanhoRuidoPositivo
-%             tamanhoRuidoPositivo = size(ruidoPositivoTemporario,1);
-%             ruidoPositivo = ruidoPositivoTemporario;
-%             maiorDimensao = i;
-%         end
-%     end
-%     mediaSinal = mean(ruidoPositivo);
-
-    % Fazendo a divisao dos dados, apos a ICA, em dois conjuntos
-%     div = cvpartition(size(ruidoICA,1), 'Holdout', 0.5); %escolhe 50% dos sinais aleatoriamente
-%     ind = div.test; %retorna os indices dos 50% escolhidos
-%     ruidoTreinoICA = ruidoICA(ind,:); %os 50% sao selecionados para o conjunto de treino
-%     ruidoTesteICA = ruidoICA(~ind,:); %os outros 50% sao selecionados para o conjunto de teste
-%     numeroEventosICA = size(ruidoTesteICA,1); %quantidade de sinais no conjunto de teste
-        
+return;        
 
 % Plotando os graficos do pulso normalizado antes e depois da ICA
 x = 1:7;
@@ -279,25 +213,25 @@ xlim([0, 8]);
 
 % Histograma das variaveis de ruido apos a aplicacao da ICA
 figure
-hist(ruidoICA(:,1), 100);
+histogram(noise_ica(:,1), 100);
 title(['Variavel 1, Ocupação ' int2str(oc)]);
 figure
-hist(ruidoICA(:,2), 100);
+histogram(noise_ica(:,2), 100);
 title(['Variavel 2, Ocupação ' int2str(oc)]);
 figure
-hist(ruidoICA(:,3), 100);
+histogram(noise_ica(:,3), 100);
 title(['Variavel 3, Ocupação ' int2str(oc)]);
 figure
-hist(ruidoICA(:,4), 100);
+histogram(noise_ica(:,4), 100);
 title(['Variavel 4, Ocupação ' int2str(oc)]);
 figure
-hist(ruidoICA(:,5), 100);
+histogram(noise_ica(:,5), 100);
 title(['Variavel 5, Ocupação ' int2str(oc)]);
 figure
-hist(ruidoICA(:,6), 100);
+histogram(noise_ica(:,6), 100);
 title(['Variavel 6, Ocupação ' int2str(oc)]);
 figure
-hist(ruidoICA(:,7), 100);
+histogram(noise_ica(:,7), 100);
 title(['Variavel 7, Ocupação ' int2str(oc)]);
 
 
@@ -328,14 +262,3 @@ title(['Variavel 7, Ocupação ' int2str(oc)]);
 % legend({'MLE Gaussiano', 'OF', 'COF', 'MLE Lognormal'}, 'Position', [0.17 0.7 0.1 0.2]);
 % xlabel('Ocupação (%)');
 % ylabel('Desvio padrão do erro (ADC counts)');
-
-
-
-
-
-
-
-
-
-
-
