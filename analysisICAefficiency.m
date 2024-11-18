@@ -65,18 +65,13 @@ for oc = occupancies
         end
         
         % Using splines to interpolate
-        %splineCoordenadaX = min(histCoordenadaX(:,j)):0.1:max(histCoordenadaX(:,j));
         spline_hist(j) = spline(hist_coordinate_x(:,j), hist_probabilities(:,j));
-        %ppval(splineHist(3),min(histCoordenadaX(:,3)):0.1:max(histCoordenadaX(:,3)));
     end
     
     % Predefined structures
     s = [0  0.0172  0.4524  1  0.5633  0.1493  0.0424]; %vetor de amostras do pulso de 
                                                         %referencia normalizado
     OF2 = [-0.3781  -0.3572  0.1808  0.8125  0.2767  -0.2056  -0.3292];
-    
-    % Applying the ICA to the normalized pulse
-%     sICA = s*W;
     
     % Mounting the complete signal
     amplitude_true = exprnd(snr*mPu, number_events, 1);
@@ -86,10 +81,13 @@ for oc = occupancies
     end    
     
     % Estimating the amplitude using the linear methods
+    % gaussian
     covariance_gauss = cov(noise_training); % covariance matrix of training data
     OF = (inv(covariance_gauss)*s')/(s*inv(covariance_gauss)*s');
     amplitude_gauss = (r - pedestal)*OF;
+    % of2
     amplitude_of = r*OF2';
+    % cof
     amplitude_cof = aplicaCOF(r - pedestal, 4.5);
 
     % Estimating the Gaussian PDF
@@ -107,49 +105,27 @@ for oc = occupancies
         fprintf("Media do sinal = %d \nOcupacao = %d \nEvento = %d/%d \n", ...
                 snr*mPu, oc, i, number_events);
 
-        amplitude_ica(i, 1) = amplitudeIca(r(i,:), s, mean_noise_training, W, amplitude_gauss(i), ...
-                                           number_dimensions, marginal_probability, spline_hist);
+        amplitude_ica(i) = amplitudeIca(r(i,:), s, mean_noise_training, W, amplitude_gauss(i), ...
+                                        number_dimensions, marginal_probability, spline_hist);
         pdf_ica(i) = pdfIca(r(i,:), s,mean_noise_training, W, amplitude_gauss(i), ...
                             number_dimensions, marginal_probability, spline_hist);
-        
-        maximum_probability = -1;
-        for amplitude_auxiliary = amplitude_gauss(i)-100:1:amplitude_gauss(i)+100
-            
-            ruidoAuxiliarTemporario = r(i,:) - amplitude_auxiliary*s;
-            ruidoAuxiliar = (ruidoAuxiliarTemporario - mean_noise_training)*W';
-            
-            for j = 1:number_dimensions
-                marginal_probability(j) = ppval(spline_hist(j), ruidoAuxiliar(j));
-            end
-            
-            probability_ica = prod(marginal_probability);
-            
-            if (probability_ica > maximum_probability)
-                amplitude_ica2(i,1) = amplitude_auxiliary;
-                maximum_probability = probability_ica;
-            end
-        end
-        
-        pdf_ica2(i) = maximum_probability;
     end
 
     % Estimating the chi2 of each method
-    chi2_gaussiano = zeros(number_events, 1);
+    chi2_gauss = zeros(number_events, 1);
     chi2_ica = zeros(number_events, 1);
     for i = 1:number_events
         % gaussian
-        noise_temporary = r(i, :) - (amplitude_gauss(i)*s + pedestal);
-        chi2_gaussiano(i) = sqrt(sum((noise_temporary.^2)./7));
+        chi2_gauss(i) = chi2EfficiencyEstimation(amplitude_gauss(i), r(i, :), s, pedestal);
         % ica
-        noise_temporary = r(i, :) - (amplitude_ica(i)*s + pedestal);
-        chi2_ica(i) = sqrt(sum((noise_temporary.^2)./7));
+        chi2_ica(i) = chi2EfficiencyEstimation(amplitude_ica(i), r(i, :), s, pedestal);
     end
     
     % Estimating the error of each method
-    error_gauss(:,1) = amplitude_gauss - amplitude_true;
-    error_of(:,1) = amplitude_of - amplitude_true;
-    error_cof(:,1) = amplitude_cof - amplitude_true;
-    error_ica(:,1) = amplitude_ica - amplitude_true;
+    error_gauss(:, 1) = amplitude_gauss - amplitude_true;
+    error_of(:, 1) = amplitude_of - amplitude_true;
+    error_cof(:, 1) = amplitude_cof - amplitude_true;
+    error_ica(:, 1) = amplitude_ica - amplitude_true;
 
     % Estimating the mean of the errors
     indice = oc/10 + 1;
@@ -192,7 +168,7 @@ ylabel('Probabilidade');
 
 % Plotando os graficos de erro versus chi2
 figure
-scatter(error_gauss, chi2_gaussiano, 'MarkerEdgeColor', 'b', 'Marker', '.');
+scatter(error_gauss, chi2_gauss, 'MarkerEdgeColor', 'b', 'Marker', '.');
 title(['MLE Gaussiano, ocupação ' int2str(oc) '%'], 'FontSize', 13);
 xlabel('Erro (contagens de ADC)');
 ylabel('\chi^2');
@@ -203,18 +179,6 @@ xlabel('Erro (contagens de ADC)');
 ylabel('\chi^2');
 
 return;        
-
-% Plotando os graficos do pulso normalizado antes e depois da ICA
-x = 1:7;
-plot(x, s, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0 0.4470 0.7410]);
-hold on
-plot(x, sICA, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.8500 0.3250 0.0980]);
-hold off
-%title(['Total MI mPu' int2str(mPu) ' snr' int2str(snr)]);
-legend({'before ICA', 'after ICA'}, 'Position', [0.78 0.7 0.1 0.2]);
-%xlabel('Occupancy (%)');
-%ylabel('Total Mutual Information (ADC counts)');
-xlim([0, 8]);
 
 % Histograma das variaveis de ruido apos a aplicacao da ICA
 figure
