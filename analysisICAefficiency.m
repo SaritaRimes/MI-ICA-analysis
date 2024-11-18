@@ -4,9 +4,9 @@
 
 clear all
 close all
-% clc
+clc
 
-addpath("FastICA_25");
+addpath('internalMethods', 'externalMethods', 'FastICA_25');
 
 mean_error_gauss = zeros(11, 1);
 mean_error_of = zeros(11, 1);
@@ -17,31 +17,34 @@ std_error_of = zeros(11, 1);
 std_error_cof = zeros(11, 1);
 std_error_ica = zeros(11, 1);
 
-mPu = 100;
+mPu = 50;
 snr = 3;
 bins = 100;
+number_events_total = 2000000;
 number_dimensions = 3;
 
 occupancies = [10 30 50 80];
 
 for oc = occupancies
 
-    noise = load(['../dadosRuido/comPedestal/mPu' int2str(mPu) '_snr' int2str(snr) ...
-                  '/noise-ocup' int2str(oc) '.csv']); % load noise data
+    noise = load(['../../../RuidoSimuladoNovoSimulador/TileCal/ruido_media' int2str(mPu) '/ruido_ocup' int2str(oc) '_' ...
+                  int2str(number_events_total) 'sinais.txt']); % load noise data
+    noise = noise(1:100000,:);
     pedestal = 50;
-    %ruido = ruido - ped;
+%     noise = noise - pedestal;
     
     % Dividing the before ICA data in two datasets
     div = cvpartition(size(noise,1), 'Holdout', 0.5); % choose 50% of signals randomly
     ind = div.test; % return the indexes of 50% of choosing signals
-    noise_train = noise(ind,:);
+    noise_training = noise(ind,:);
     noise_test = noise(~ind,:);
     number_events = size(noise_test,1); %quantidade de sinais no conjunto de teste
 
-    mean_noise_train = mean(noise_train);
+    % Estimating the mean of the training data
+    mean_noise_training = mean(noise_training);
 
     % Applying ICA to the noise data of training
-    [noise_ica, A, W] = fastica(noise_train', 'numOfIC', number_dimensions); % ICA function
+    [noise_ica, A, W] = fastica(noise_training', 'numOfIC', number_dimensions); % ICA function
     noise_ica = noise_ica'; % variables must be in columns
 
     % Normalizing the histograms of noise after ICA
@@ -56,19 +59,18 @@ for oc = occupancies
 
     % Finding the x coordinates of histograms
     hist_coordinate_x = zeros(size(hist_bins, 1) - 1, number_dimensions);
-    spline_hist = zeros(number_dimensions);
     for j = 1:number_dimensions
         for i = 1:size(hist_bins, 1) - 1
             hist_coordinate_x(i,j) = (hist_bins(i,j) + hist_bins(i + 1,j))/2;
         end
         
-        %Utilizando spline para interpolar
+        % Using splines to interpolate
         %splineCoordenadaX = min(histCoordenadaX(:,j)):0.1:max(histCoordenadaX(:,j));
         spline_hist(j) = spline(hist_coordinate_x(:,j), hist_probabilities(:,j));
         %ppval(splineHist(3),min(histCoordenadaX(:,3)):0.1:max(histCoordenadaX(:,3)));
     end
     
-    % Structures pre defined
+    % Predefined structures
     s = [0  0.0172  0.4524  1  0.5633  0.1493  0.0424]; %vetor de amostras do pulso de 
                                                         %referencia normalizado
     OF2 = [-0.3781  -0.3572  0.1808  0.8125  0.2767  -0.2056  -0.3292];
@@ -84,19 +86,17 @@ for oc = occupancies
     end    
     
     % Estimating the amplitude using the linear methods
-    covariance_gauss = cov(noise_train); % covariance matrix of training data
+    covariance_gauss = cov(noise_training); % covariance matrix of training data
     OF = (inv(covariance_gauss)*s')/(s*inv(covariance_gauss)*s');
     amplitude_gauss = (r - pedestal)*OF;
     amplitude_of = r*OF2';
-    amplitude_cof = aplicaCOF(r - pedestal,4.5);
+    amplitude_cof = aplicaCOF(r - pedestal, 4.5);
 
     % Estimating the Gaussian PDF
-    noise_gauss = r - amplitude_gauss*s;
     pdf_gauss = ones(number_events, 1);
-    for i = 1:size(noise_gauss, 1)
-        pdf_gauss(i) = (1/(sqrt(det(covariance_gauss))*(2*pi)^(3.5)))...
-                          *exp(-.5*noise_gauss(i, :)*inv(covariance_gauss) ...
-                               *noise_gauss(i, :)');
+    for i = 1:number_events
+        pdf_gauss(i) = pdfGaussian(mean_noise_training, covariance_gauss, ...
+                                   r(i,:), s, amplitude_gauss(i));
     end
     
     % Estimating the amplitude using MLE + ICA method
@@ -106,12 +106,17 @@ for oc = occupancies
     for i = 1:number_events
         fprintf("Media do sinal = %d \nOcupacao = %d \nEvento = %d/%d \n", ...
                 snr*mPu, oc, i, number_events);
+
+        amplitude_ica(i, 1) = amplitudeIca(r(i,:), s, mean_noise_training, W, amplitude_gauss(i), ...
+                                           number_dimensions, marginal_probability, spline_hist);
+        pdf_ica(i) = pdfIca(r(i,:), s,mean_noise_training, W, amplitude_gauss(i), ...
+                            number_dimensions, marginal_probability, spline_hist);
         
         maximum_probability = -1;
         for amplitude_auxiliary = amplitude_gauss(i)-100:1:amplitude_gauss(i)+100
             
             ruidoAuxiliarTemporario = r(i,:) - amplitude_auxiliary*s;
-            ruidoAuxiliar = (ruidoAuxiliarTemporario-mean_noise_train)*W';
+            ruidoAuxiliar = (ruidoAuxiliarTemporario - mean_noise_training)*W';
             
             for j = 1:number_dimensions
                 marginal_probability(j) = ppval(spline_hist(j), ruidoAuxiliar(j));
@@ -120,12 +125,12 @@ for oc = occupancies
             probability_ica = prod(marginal_probability);
             
             if (probability_ica > maximum_probability)
-                amplitude_ica(i,1) = amplitude_auxiliary;
+                amplitude_ica2(i,1) = amplitude_auxiliary;
                 maximum_probability = probability_ica;
             end
         end
         
-        pdf_ica(i) = maximum_probability;
+        pdf_ica2(i) = maximum_probability;
     end
 
     % Estimating the chi2 of each method

@@ -21,7 +21,7 @@ for oc = occupancies
     fprintf(['Mean of pile-up: ' int2str(mPu) ',\t Occupancy: ' int2str(oc) '\n']);
 
     data_total = load(['../../../RuidoSimuladoNovoSimulador/TileCal/ruido_media' int2str(mPu) '/ruido_ocup' int2str(oc) '_' ...
-                 int2str(number_events_total) 'sinais.txt']); % load noise data
+                       int2str(number_events_total) 'sinais.txt']); % load noise data
 
     number_events = size(data_total, 1)/number_folds;
     number_samples = size(data_total, 2);

@@ -1,6 +1,6 @@
 function mutual_information_crosstalk = mutualInformationCrosstalk(mutual_information, number_samples)
-    upper_triangular_matrix_sum = 0; %soma da matriz triangular superior sem diagonal
-    ini = 2; %variavel da coluna da matriz
+    upper_triangular_matrix_sum = 0; % sum of superior triangular matrix without its diagonal
+    ini = 2; % variable of column of matrix
     for i = 1:(number_samples-1)
         for j = ini:number_samples
             upper_triangular_matrix_sum = upper_triangular_matrix_sum + mutual_information(i,j);
@@ -9,8 +9,8 @@ function mutual_information_crosstalk = mutualInformationCrosstalk(mutual_inform
         ini = ini + 1;
     end
 
-    lower_triangular_matrix_sum = 0; %soma da matriz triangular superior com diagonal
-    ini = 1; %variavel da coluna da matriz
+    lower_triangular_matrix_sum = 0; % sum of lower triangular matrix with its diagonal
+    ini = 1; % variable of column of matrix
     for i = 1:number_samples
         for j = ini:number_samples
             lower_triangular_matrix_sum = lower_triangular_matrix_sum + mutual_information(i,j);
