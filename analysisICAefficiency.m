@@ -1,4 +1,4 @@
-%% Effiiency Analysis %%
+%% Efficiency Analysis %%
 % Methods: OF, COF, Gaussian MLE e ICA MLE %
 % Data: it was generated using the new simulator (github.com/ingoncalves/calorimetry-pulse-simulator) %
 
@@ -19,9 +19,9 @@ std_error_ica = zeros(11, 1);
 
 mPu = 50;
 snr = 3;
-bins = 100;
+bins = 200;
 number_events_total = 2000000;
-number_dimensions = 3;
+number_dimensions = 7;
 
 occupancies = [10 30 50 80];
 
@@ -47,30 +47,39 @@ for oc = occupancies
     [noise_ica, A, W] = fastica(noise_training', 'numOfIC', number_dimensions); % ICA function
     noise_ica = noise_ica'; % variables must be in columns
 
-    % Normalizing the histograms of noise after ICA
+    % Normalizing the histograms of noise after ICA and finding their x coordinates
     hist_probabilities = -1*ones(bins, size(noise_ica,2));
     hist_bins = zeros(bins + 1, size(noise_ica,2));
-    for i = 1:number_dimensions
-        h = histogram(noise_ica(:,i), bins, 'Normalization', 'probability');
-        hist_probabilities(:,i) = h.Values;
-        hist_bins(:,i) = h.BinEdges;
-        figure
-    end
-
-    % Finding the x coordinates of histograms
     hist_coordinate_x = zeros(size(hist_bins, 1) - 1, number_dimensions);
-    for j = 1:number_dimensions
-        for i = 1:size(hist_bins, 1) - 1
-            hist_coordinate_x(i,j) = (hist_bins(i,j) + hist_bins(i + 1,j))/2;
+    ica_probabilities_hist = gobjects(1, number_dimensions);
+    for i = 1:number_dimensions
+        % Plotting the normalized histograms
+        ica_probabilities_hist(i) = figure;
+        h = histogram(noise_ica(:, i), bins, 'Normalization', 'probability', ...
+                      'FaceColor', '#DF65F8', 'EdgeColor', '#DF65F8');
+
+        % Finding the bin edges and the values
+        hist_probabilities(:, i) = h.Values;
+        hist_bins(:, i) = h.BinEdges;
+
+        % Finding the x coordinates
+        for j = 1:size(hist_bins, 1) - 1
+            hist_coordinate_x(j, i) = (hist_bins(j, i) + hist_bins(j + 1, i))/2;
         end
-        
+
         % Using splines to interpolate
-        spline_hist(j) = spline(hist_coordinate_x(:,j), hist_probabilities(:,j));
+        spline_hist(i) = spline(hist_coordinate_x(:, i), hist_probabilities(:, i));
+
+        % Plotting the interpolations
+        hold on
+        plot(hist_coordinate_x(:, i), ppval(hist_coordinate_x(:, i), spline_hist(i)), ...
+             'Color', 'k', 'LineWidth', 1);
+        legend({['variable ' int2str(i)], ['interpolation ' int2str(i)]}, 'Location', 'best');
+        hold off
     end
     
     % Predefined structures
-    s = [0  0.0172  0.4524  1  0.5633  0.1493  0.0424]; %vetor de amostras do pulso de 
-                                                        %referencia normalizado
+    s = [0  0.0172  0.4524  1  0.5633  0.1493  0.0424]; % normalized reference pulse
     OF2 = [-0.3781  -0.3572  0.1808  0.8125  0.2767  -0.2056  -0.3292];
     
     % Mounting the complete signal
@@ -141,6 +150,8 @@ for oc = occupancies
     std_error_ica(indice, 1) = std(error_ica);
 end
 
+return;
+
 % Plotando os histogramas dos erros
 histogram(error_gauss, 100, 'DisplayStyle', 'stairs', 'EdgeColor', 'r', 'LineWidth', 1.5);
 hold on
@@ -178,56 +189,31 @@ title(['MLE + ICA, ocupação ' int2str(oc) '%'], 'FontSize', 13);
 xlabel('Erro (contagens de ADC)');
 ylabel('\chi^2');
 
-return;        
-
-% Histograma das variaveis de ruido apos a aplicacao da ICA
-figure
-histogram(noise_ica(:,1), 100);
-title(['Variavel 1, Ocupação ' int2str(oc)]);
-figure
-histogram(noise_ica(:,2), 100);
-title(['Variavel 2, Ocupação ' int2str(oc)]);
-figure
-histogram(noise_ica(:,3), 100);
-title(['Variavel 3, Ocupação ' int2str(oc)]);
-figure
-histogram(noise_ica(:,4), 100);
-title(['Variavel 4, Ocupação ' int2str(oc)]);
-figure
-histogram(noise_ica(:,5), 100);
-title(['Variavel 5, Ocupação ' int2str(oc)]);
-figure
-histogram(noise_ica(:,6), 100);
-title(['Variavel 6, Ocupação ' int2str(oc)]);
-figure
-histogram(noise_ica(:,7), 100);
-title(['Variavel 7, Ocupação ' int2str(oc)]);
-
-
-% Plotando os graficos de media e desvio padrao
-% x = 0:10:100;
-% plot(x, mediaGaussiano, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0 0.4470 0.7410]);
-% hold on
-% plot(x, mediaOF2, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.8500 0.3250 0.0980]);
-% hold on
-% plot(x, mediaCOF, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.4940 0.1840 0.5560]);
-% hold on
-% plot(x, mediaLognormal, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.6350 0.0780 0.1840]);
-% hold off
-% title(['Média mPu' int2str(mPu) ' snr' int2str(snr)]);
-% legend({'MLE Gaussiano', 'OF', 'COF', 'MLE Lognormal'}, 'Position', [0.17 0.7 0.1 0.2]);
-% xlabel('Ocupação (%)');
-% ylabel('Média do erro (ADC counts)');
-
-% plot(x,desvioPadraoGaussiano, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0 0.4470 0.7410]);
-% hold on
-% plot(x, desvioPadraoOF2, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.8500 0.3250 0.0980]);
-% hold on
-% plot(x, desvioPadraoCOF, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.4940 0.1840 0.5560]);
-% hold on
-% plot(x, desvioPadraoLognormal, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.6350 0.0780 0.1840]);
-% hold off
-% title(['Desvio padrão mPu' int2str(mPu) ' snr' int2str(snr)]);
-% legend({'MLE Gaussiano', 'OF', 'COF', 'MLE Lognormal'}, 'Position', [0.17 0.7 0.1 0.2]);
-% xlabel('Ocupação (%)');
-% ylabel('Desvio padrão do erro (ADC counts)');
+% Plotting the mean and standard deviation graphs
+x = 0:10:100;
+% mean
+plot(x, mean_error_gauss, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0 0.4470 0.7410]);
+hold on
+plot(x, mean_error_of, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.8500 0.3250 0.0980]);
+hold on
+plot(x, mean_error_cof, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.4940 0.1840 0.5560]);
+hold on
+plot(x, mean_error_ica, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.6350 0.0780 0.1840]);
+hold off
+title(['Média mPu' int2str(mPu) ' snr' int2str(snr)]);
+legend({'Gaussian MLE', 'OF', 'COF', 'MLE + ICA'}, 'Position', [0.17 0.7 0.1 0.2]);
+xlabel('Occupancy (%)');
+ylabel('Mean of error (ADC counts)');
+% standard deviation
+plot(x, std_error_gauss, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0 0.4470 0.7410]);
+hold on
+plot(x, std_error_of, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.8500 0.3250 0.0980]);
+hold on
+plot(x, std_error_cof, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.4940 0.1840 0.5560]);
+hold on
+plot(x, std_error_ica, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.6350 0.0780 0.1840]);
+hold off
+title(['Desvio padrão mPu' int2str(mPu) ' snr' int2str(snr)]);
+legend({'Gaussian MLE', 'OF', 'COF', 'MLE + ICA'}, 'Position', [0.17 0.7 0.1 0.2]);
+xlabel('Occupancy (%)');
+ylabel('Standard Deviation of error (ADC counts)');
