@@ -18,7 +18,7 @@ std_error_cof = zeros(11, 1);
 std_error_ica = zeros(11, 1);
 
 mPu = 50;
-snr = 3;
+snr = 2;
 bins = 200;
 number_events_total = 2000000;
 number_dimensions = 7;
@@ -29,7 +29,7 @@ for oc = occupancies
 
     noise = load(['../../../RuidoSimuladoNovoSimulador/TileCal/ruido_media' int2str(mPu) '/ruido_ocup' int2str(oc) '_' ...
                   int2str(number_events_total) 'sinais.txt']); % load noise data
-    noise = noise(1:100000,:);
+    noise = noise(1:100000, :);
     pedestal = 50;
 %     noise = noise - pedestal;
     
@@ -165,7 +165,7 @@ xlim([-500 600]);
 legend({'MLE Gaussiano', 'OF', 'COF', 'MLE ICA'}, 'Position', [0.17 0.7 0.1 0.2]);
 title(['Histograma dos erros com ' int2str(number_dimensions) ' dimensões']);
 
-% Plotando os graficos de erro versus probabilidade
+% Plotting the error versus probability graphs
 figure
 scatter(error_gauss, pdf_gauss, 'MarkerEdgeColor', 'b', 'Marker', '.');
 title(['MLE Gaussiano, ocupação ' int2str(oc) '%'], 'FontSize', 13);
@@ -177,7 +177,7 @@ title(['MLE + ICA, ocupação ' int2str(oc) '%'], 'FontSize', 13);
 xlabel('Erro (contagens de ADC)');
 ylabel('Probabilidade');
 
-% Plotando os graficos de erro versus chi2
+% Plotting the error versus chi2 graphs
 figure
 scatter(error_gauss, chi2_gauss, 'MarkerEdgeColor', 'b', 'Marker', '.');
 title(['MLE Gaussiano, ocupação ' int2str(oc) '%'], 'FontSize', 13);
@@ -190,28 +190,29 @@ xlabel('Erro (contagens de ADC)');
 ylabel('\chi^2');
 
 % Plotting the mean and standard deviation graphs
-x = 0:10:100;
 % mean
-plot(x, mean_error_gauss, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0 0.4470 0.7410]);
+figure
+plot(occupancies, mean_error_gauss, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0 0.4470 0.7410]);
 hold on
-plot(x, mean_error_of, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.8500 0.3250 0.0980]);
+plot(occupancies, mean_error_of, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.8500 0.3250 0.0980]);
 hold on
-plot(x, mean_error_cof, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.4940 0.1840 0.5560]);
+plot(occupancies, mean_error_cof, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.4940 0.1840 0.5560]);
 hold on
-plot(x, mean_error_ica, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.6350 0.0780 0.1840]);
+plot(occupancies, mean_error_ica, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.6350 0.0780 0.1840]);
 hold off
 title(['Média mPu' int2str(mPu) ' snr' int2str(snr)]);
 legend({'Gaussian MLE', 'OF', 'COF', 'MLE + ICA'}, 'Position', [0.17 0.7 0.1 0.2]);
 xlabel('Occupancy (%)');
 ylabel('Mean of error (ADC counts)');
 % standard deviation
-plot(x, std_error_gauss, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0 0.4470 0.7410]);
+figure
+plot(occupancies, std_error_gauss, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0 0.4470 0.7410]);
 hold on
-plot(x, std_error_of, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.8500 0.3250 0.0980]);
+plot(occupancies, std_error_of, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.8500 0.3250 0.0980]);
 hold on
-plot(x, std_error_cof, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.4940 0.1840 0.5560]);
+plot(occupancies, std_error_cof, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.4940 0.1840 0.5560]);
 hold on
-plot(x, std_error_ica, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.6350 0.0780 0.1840]);
+plot(occupancies, std_error_ica, 'Color', [0.6 0.6 0.6], 'Marker', '.', 'MarkerSize', 20, 'MarkerEdgeColor', [0.6350 0.0780 0.1840]);
 hold off
 title(['Desvio padrão mPu' int2str(mPu) ' snr' int2str(snr)]);
 legend({'Gaussian MLE', 'OF', 'COF', 'MLE + ICA'}, 'Position', [0.17 0.7 0.1 0.2]);
